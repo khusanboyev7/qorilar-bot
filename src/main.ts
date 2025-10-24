@@ -1,40 +1,14 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import cookieParser from 'cookie-parser';
+import { ConfigService } from '@nestjs/config';
 
-async function start() {
-  const PORT = process.env.PORT;
-  const app = await NestFactory.create(AppModule, {
-    logger: ['error', 'warn'],
-  });
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
 
-  app.use(cookieParser());
+  const config = app.get(ConfigService);
+  const PORT = config.get('PORT') || 3000;
 
-  app.setGlobalPrefix('api');
-  app.useGlobalPipes(new ValidationPipe());
-
-  const config = new DocumentBuilder()
-    .setTitle('bot-qorilar Project')
-    .setDescription('The qorilar-bot API description')
-    .setVersion('1.0')
-    .addTag(
-      'Nest, access and refresh tokens, cookies, NodeMailer, Bot and othenpm install --save @nestjs/swaggerrs...',
-    )
-    .addBearerAuth({
-      type: 'http',
-      scheme: 'Bearer',
-      in: 'Header',
-    })
-    .build();
-
-  const documentFactory = () => SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, documentFactory);
-
-  await app.listen(process.env.PORT ?? 3000, () => {
-    console.log(`Server started at: http://localhost:${PORT}`);
-    console.log(`Swagger document: http://localhost:${PORT}/api`);
-  });
+  await app.listen(PORT);
+  console.log(`🚀 Server ishga tushdi: http://localhost:${PORT}`);
 }
-start();
+bootstrap();

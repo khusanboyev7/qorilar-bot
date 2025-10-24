@@ -1,15 +1,16 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { TelegrafModule } from 'nestjs-telegraf';
-import { session } from 'telegraf';
-import { BOT_NAME } from './app.constants';
+import LocalSession from 'telegraf-session-local';
 import { BotModule } from './bot/bot.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
+    // .env fayldan global konfiguratsiyalar
+    ConfigModule.forRoot({ isGlobal: true }),
 
+    // PostgreSQL ulanmasi
     SequelizeModule.forRoot({
       dialect: 'postgres',
       host: process.env.PG_HOST,
@@ -18,19 +19,45 @@ import { BotModule } from './bot/bot.module';
       password: process.env.PG_PASSWORD,
       database: process.env.PG_DATABASE,
       autoLoadModels: true,
-      synchronize: true,
-      logging: false,
+      synchronize: process.env.SYNC_MODE === 'true',
+      logging: process.env.LOGGING === 'true',
     }),
 
+    // Telegraf konfiguratsiyasi
     TelegrafModule.forRootAsync({
-      botName: BOT_NAME,
-      useFactory: () => ({
-        token: process.env.BOT_TOKEN!,
-        middlewares: [session()], // ✅ session middleware qo‘shdik!
-        include: [BotModule],
-      }),
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const isWebhook = config.get<string>('USE_WEBHOOK') === 'true';
+        const domain = config.get<string>('WEBHOOK_URL');
+
+        const launchOptions =
+          isWebhook && domain
+            ? {
+                webhook: {
+                  domain,
+                  hookPath: '/api/bot',
+                },
+                dropPendingUpdates: true,
+              }
+            : { dropPendingUpdates: true };
+
+        return {
+          token: config.get<string>('BOT_TOKEN') ?? '',
+          middlewares: [
+            // Session ma'lumotlarini faylda saqlaydi
+            new LocalSession({
+              database: './src/session.json',
+              property: 'session',
+            }).middleware(),
+          ],
+          include: [BotModule],
+          launchOptions,
+        };
+      },
     }),
 
+    // Bot uchun modul
     BotModule,
   ],
 })
